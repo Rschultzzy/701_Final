@@ -1,0 +1,167 @@
+---
+title: "701_Final_Schultz"
+output:
+  html_document:
+    df_print: paged
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+library(tidyverse)
+library(xml2)
+library(rvest)
+library(survey)
+library(magrittr)
+library(scales)
+library(ggpubr)
+library(dplyr)
+library(sjPlot)
+library(haven)
+library(PracTools)
+```
+
+```{r}
+library(readxl)
+finalexam <- read_excel("~/Downloads/finalexam.xlsx")
+```
+
+```{r}
+# Rename DF
+final <-finalexam
+
+final <- final %>% mutate(HYPTSN = replace(HYPTSN, HYPTSN=="2",0))
+# 2 "no" is now 0
+
+final$SEX <- relevel(as.factor(final$SEX), ref='1')
+final$RACE_ETH <- relevel(as.factor(final$RACE_ETH), ref='1')
+final$REGION <- relevel(as.factor(final$REGION), ref='4')
+final$MARITL <- relevel(as.factor(final$MARITL), ref='3')
+final$WRK_C <- relevel(as.factor(final$WRK_C), ref='4')
+final$EMPLOY_I <- relevel(as.factor(final$EMPLOY_I), ref='1')
+final$HSTAT <- relevel(as.factor(final$HSTAT), ref='4')
+```
+
+```{r}
+#Specify survey design 
+rfsvy <- svydesign(strata=~STRAT_P,id=~PSU_P, weights=~WTFA_SA, data=final, nest=T, na.rm=T)
+```
+
+```{r}
+rfsvy$variables
+```
+
+```{r}
+require(survey)
+
+rfsvy <- svydesign(strata=~STRAT_P,id=~PSU_P, weights=~WTFA_SA, data=final, nest=T)
+
+# Model 1 - AGE_P, SEX and Region
+mod1 <- svyglm(INCM ~ AGE_P + as.factor(SEX) + as.factor(REGION), design=rfsvy)
+mod1
+```
+
+```{r}
+# Model 2 - AGE_P, SEX, REGION, RACE_ETH, MARITL, WK_YR and WRK_C
+mod4 <- svyglm(INCM ~ AGE_P + as.factor(SEX) + as.factor(REGION) + as.factor(RACE_ETH) + as.factor(MARITL) + WK_YR + as.factor(WRK_C), design=rfsvy)
+mod4
+```
+
+```{r}
+# Model 1
+tab_model(mod1, show.se = TRUE, show.std = TRUE, df.method = "wald")
+```
+
+```{r}
+# Model 1
+tab_model(mod4, show.se = TRUE, show.std = TRUE, df.method = "wald")
+```
+
+```{r}
+# TEST for income on MARITL, WK_YR, RACE_ETH and WRK_C
+regTermTest(mod4, ~as.factor(MARITL))
+regTermTest(mod4, ~WK_YR)
+regTermTest(mod4, ~as.factor(RACE_ETH))
+regTermTest(mod4, ~as.factor(WRK_C))
+```
+
+```{r}
+regTermTest(mod4, ~as.factor(MARITL))
+```
+
+```{r}
+# 1.2a)
+mod2 <- lm(INCM ~ AGE_P + factor(SEX) + factor(REGION) + factor(RACE_ETH) + factor(MARITL) +WK_YR + factor(WRK_C), na.rm=TRUE, data = final)
+summary(mod2)
+```
+```{r}
+library(sjPlot)
+library(sjmisc)
+library(sjlabelled)
+
+tab_model(mod2, show.se = TRUE, show.std = TRUE)
+```
+
+```{r}
+# Problem 2
+rfsvy <- svydesign(strata=~STRAT_P,id=~PSU_P, weights=~WTFA_SA, data=final, nest=T)
+
+mod3 <- svyglm(HYPTSN ~ AGE_P + factor(SEX) + factor(REGION) + factor(RACE_ETH) + INCM + BMI1 + SMK_ST1 + SLP_TM, family=quasibinomial, design=rfsvy)
+summary(mod3)
+```
+
+```{r}
+# 2.2 Odds Ratio
+library(sjPlot)
+library(sjmisc)
+library(sjlabelled)
+
+tab_model(mod3, show.se = T)
+```
+
+```{r}
+# Joint design-adjusted Wald Test
+# TEST for income on MARITL, WK_YR, RACE_ETH and WRK_C
+regTermTest(mod3, ~factor(SEX))
+regTermTest(mod3, ~as.factor(RACE_ETH))
+regTermTest(mod3, ~as.factor(SMK_ST1))
+```
+```{r}
+rfsvy <- svydesign(strata=~STRAT_P,id=~PSU_P, weights=~WTFA_SA, data=final, nest=T)
+
+mod8 <- svyglm(HYPTSN ~ AGE_P + factor(SEX) + factor(REGION) + factor(RACE_ETH) + INCM + BMI1 + SMK_ST1 + SLP_TM + BMI1:SEX, family=quasibinomial, design=rfsvy)
+summary(mod8)
+```
+
+```{r}
+library(sjPlot)
+library(sjmisc)
+library(sjlabelled)
+
+tab_model(mod8, show.se = T)
+```
+
+
+```{r}
+# Refitting model but testing BMI1 and SEX
+regTermTest(mod8, ~BMI1:SEX) 
+```
+
+```{r}
+ regTermTest(mod8, ~as.factor(RACE_ETH) + as.factor(SMK_ST1) + factor(SEX), method="WorkingWald", df=NULL)
+```
+
+```{r}
+# Problem 3
+rfsvy <- svydesign(strata=~STRAT_P,id=~PSU_P, weights=~WTFA_SA, data=final, nest=T)
+
+mod4 <- svyolr(factor(HSTAT) ~ factor(SEX) + factor(REGION) + factor(RACE_ETH) + INCM + BMI1 + SMK_ST1 + SLP_TM, design = rfsvy)
+mod4
+```
+
+```{r}
+tab_model(mod4, show.se = T)
+```
+
